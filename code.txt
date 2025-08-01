@@ -1,0 +1,335 @@
+Okay, let's document every function within your `realAssistant.py` script.
+
+---
+
+# Function Documentation for `realAssistant.py`
+
+This section provides detailed documentation for each function within the `realAssistant.py` application, covering their purpose, parameters, return values, and behavior.
+
+## Global Functions
+
+### `get_resource_path(relative_path)`
+
+* **Purpose:** Determines the absolute path to a resource file, accounting for whether the script is running as a standalone PyInstaller executable or in a standard Python development environment. This is crucial for correctly locating external files like `metadata.ini`.
+* **Parameters:**
+    * `relative_path` (str): The path to the resource file, relative to the script's root or the bundled application's root.
+* **Returns:**
+    * `str`: The absolute path to the resource file.
+* **Functionality:**
+    1.  Checks if the script is running in a PyInstaller bundle using `getattr(sys, 'frozen', False)`.
+    2.  If bundled:
+        * It first attempts to find the resource in the same directory as the executable (`sys.executable`). This handles scenarios where the file is placed directly next to the `.exe` (e.g., in `--onedir` mode or if manually copied in `--onefile` mode).
+        * If not found there, it falls back to checking the `sys._MEIPASS` attribute, which points to the temporary directory where PyInstaller extracts bundled files in `--onefile` mode.
+    3.  If not bundled (development environment): It assumes the resource is relative to the current working directory (`os.path.abspath(".")`).
+    4.  Constructs and returns the full absolute path.
+* **Dependencies:** `os`, `sys` modules.
+* **Used by:** `PDFCreateGUI.__init__` (to find `metadata.ini`).
+
+## `PDFCreateGUI` Class Methods
+
+### `__init__(self, root)`
+
+* **Purpose:** Initializes the main graphical user interface (GUI) of the `realAssistant` application and sets up its initial state.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+    * `root` (tk.Tk): The main Tkinter window (root widget) for the application.
+* **Returns:** None
+* **Functionality:**
+    1.  Sets the main window's title ("realAssistant") and initial geometry ("500x475").
+    2.  Initializes `self.is_running` to `False` (flag for background task status).
+    3.  Initializes `self.current_files` as an empty list to store paths of loaded PDF files.
+    4.  Calls `get_resource_path` to determine the absolute path for `metadata.ini` and then calls `self.load_metadata` to load configuration profiles.
+    5.  Creates and packs/grids various Tkinter widgets:
+        * `tk.Listbox`: Displays the list of added PDF files.
+        * `tk.Frame` (button\_frame): Contains "Add File(s)", "Add Folder", "Delete", and "Clear" buttons.
+        * `ttk.Label` and `ttk.Combobox` (`self.action_cb`): For selecting the desired PDF action, populated with a hardcoded list of actions. Binds `<<ComboboxSelected>>` to `self.on_action_select`.
+        * `tk.Frame` (`self.metadata_profile_frame`): Contains "Select Metadata Profile" label and combobox (`self.profile_cb`). Its visibility is controlled by action selection. Populates `self.profile_cb` from loaded metadata, or disables it if no profiles are found.
+        * `tk.Frame` (`self.rotation_options_frame`): Contains "Rotation Angle" label and combobox (`self.rotation_angle_cb`). Its visibility is controlled by action selection.
+        * `tk.Frame` (self.button\_frame2): Contains "Execute Action" and "Cancel" buttons. The "Execute Action" button is bound to `self.start_execute_thread`.
+        * `tk.Label` (`self.status_bar`): Displays status messages to the user.
+        * `ttk.Progressbar` (`self.progress_bar`): Shows the progress of ongoing operations.
+    6.  Initially hides `self.metadata_profile_frame` and `self.rotation_options_frame`.
+    7.  Sets the initial state of the "Cancel" button to disabled.
+* **Dependencies:** `os`, `sys`, `configparser`, `tkinter`, `PyPDF2`, `reportlab`, `shutil`, `threading`, `time`, `get_resource_path`.
+
+### `load_metadata(self, filename)`
+
+* **Purpose:** Reads and parses metadata profiles from the specified INI file.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+    * `filename` (str): The absolute path to the `metadata.ini` file.
+* **Returns:**
+    * `dict`: A dictionary where keys are section names (profile names) and values are dictionaries of key-value pairs from that section (metadata fields). Returns an empty dictionary if the file cannot be loaded or is empty.
+* **Functionality:**
+    1.  Initializes a `configparser.ConfigParser` object.
+    2.  Attempts to read the `filename`.
+    3.  If successful, it iterates through all sections in the config and populates `metadata_dict`.
+    4.  Prints debug information to the console about loaded file and found sections.
+    5.  If an error occurs during reading, it prints the error to the console and displays a `messagebox.showerror` to the user.
+* **Dependencies:** `configparser`, `tkinter.messagebox`.
+* **Used by:** `PDFCreateGUI.__init__`.
+
+### `add_files(self)`
+
+* **Purpose:** Allows the user to select one or more PDF files to add to the processing list.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+* **Returns:** None
+* **Functionality:**
+    1.  Opens a file dialog configured to accept multiple PDF files (`filetypes=[("PDF files", "*.pdf")]`).
+    2.  If files are selected, it iterates through them.
+    3.  Adds each selected file's full path to `self.current_files` list only if it's not already present (prevents duplicates).
+    4.  Inserts the base filename into `self.file_listbox` for display.
+    5.  Updates the status bar.
+* **Dependencies:** `tkinter.filedialog`, `os.path`.
+* **Used by:** "Add File(s)" button command.
+
+### `add_folder(self)`
+
+* **Purpose:** Allows the user to select a folder, and all PDF files within that folder are added to the processing list.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+* **Returns:** None
+* **Functionality:**
+    1.  Opens a directory selection dialog.
+    2.  If a folder is selected, it iterates through all files in that folder.
+    3.  If a file has a `.pdf` extension (case-insensitive), its full path is added to `self.current_files` (preventing duplicates).
+    4.  Inserts the base filename into `self.file_listbox` for display.
+    5.  Updates the status bar.
+* **Dependencies:** `tkinter.filedialog`, `os`, `os.path`.
+* **Used by:** "Add Folder" button command.
+
+### `delete_file(self)`
+
+* **Purpose:** Removes selected PDF files from both the display listbox and the internal `self.current_files` list.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+* **Returns:** None
+* **Functionality:**
+    1.  Gets the indices of all currently selected items in `self.file_listbox`.
+    2.  If no items are selected, displays a warning messagebox.
+    3.  If items are selected, it iterates through the indices in reverse order (to avoid issues when deleting elements from a list by index).
+    4.  Deletes the item from `self.file_listbox` and the corresponding file path from `self.current_files`.
+    5.  Updates the status bar.
+* **Dependencies:** `tkinter.messagebox`.
+* **Used by:** "Delete" button command.
+
+### `clear_files(self)`
+
+* **Purpose:** Removes all PDF files from both the display listbox and the internal `self.current_files` list after user confirmation.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+* **Returns:** None
+* **Functionality:**
+    1.  Displays a "Yes/No" confirmation messagebox.
+    2.  If the user confirms, it deletes all items from `self.file_listbox` and clears `self.current_files`.
+    3.  Updates the status bar.
+* **Dependencies:** `tkinter.messagebox`.
+* **Used by:** "Clear" button command.
+
+### `update_status(self, message, progress=0)`
+
+* **Purpose:** Updates the text in the status bar and the value of the progress bar.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+    * `message` (str): The text to display in the status bar.
+    * `progress` (int, optional): The value for the progress bar (0-100). Defaults to 0.
+* **Returns:** None
+* **Functionality:**
+    1.  Configures the `self.status_bar` text.
+    2.  Sets the `value` of `self.progress_bar`.
+    3.  Calls `self.root.update_idletasks()` to force an immediate refresh of the GUI, ensuring the updates are visible.
+* **Dependencies:** Tkinter GUI components.
+* **Used by:** All action methods and file management methods.
+
+### `on_action_select(self, event)`
+
+* **Purpose:** Hides and shows specific options frames based on the currently selected action in the action combobox.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+    * `event` (Tkinter Event): The event object triggered by the combobox selection.
+* **Returns:** None
+* **Functionality:**
+    1.  Gets the currently selected action from `self.action_cb`.
+    2.  First, it calls `pack_forget()` on all action-specific frames (`self.metadata_profile_frame`, `self.rotation_options_frame`) to hide them.
+    3.  Then, based on the `selected_action`:
+        * If "Write Metadata", it calls `pack(pady=5)` on `self.metadata_profile_frame` to make it visible.
+        * If "Rotate PDF", it calls `pack(pady=5)` on `self.rotation_options_frame` to make it visible.
+* **Dependencies:** Tkinter GUI components.
+* **Used by:** `self.action_cb`'s `<<ComboboxSelected>>` event binding.
+
+### `start_execute_thread(self)`
+
+* **Purpose:** Initiates the PDF processing action in a separate thread to prevent the GUI from freezing during long operations.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+* **Returns:** None
+* **Functionality:**
+    1.  Checks if `self.current_files` is empty; if so, shows a warning and returns.
+    2.  Disables the "Execute Action" button and enables the "Cancel" button.
+    3.  Sets `self.is_running` to `True`.
+    4.  Updates the status bar to "Starting action...".
+    5.  Creates a new `threading.Thread` whose target is `self.execute_action`.
+    6.  Starts the newly created thread.
+* **Dependencies:** `threading`, `tkinter.messagebox`.
+* **Used by:** "Execute Action" button command.
+
+### `execute_action(self)`
+
+* **Purpose:** The main worker method that orchestrates the execution of the selected PDF action on all loaded files. It runs in a separate thread.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+* **Returns:** None
+* **Functionality:**
+    1.  Gets the selected action from `self.action_cb`.
+    2.  Prompts the user to select an output directory using `filedialog.askdirectory`. If no directory is selected, it resets buttons and returns.
+    3.  Calculates `total_files` for progress tracking.
+    4.  Enters a `try-except-finally` block for robust error handling.
+    5.  Iterates through each `file_path` in `self.current_files`:
+        * Checks `self.is_running` flag; if `False`, the loop breaks (cancellation).
+        * Updates the progress bar and status bar for the current file.
+        * Calls the appropriate private helper method (`_remove_mcard_from_name`, `_split_pdf`, etc.) based on `selected_action`.
+        * **Special handling for "Merge PDF":** It only calls `_merge_pdfs` once for the first file, as merge acts on the entire list. Subsequent files in the loop are skipped for this action.
+        * If an unknown action is selected, shows an error messagebox and breaks.
+    6.  After the loop, updates the status bar to "Action completed!" or "Action cancelled."
+    7.  **`finally` block:** Calls `self.reset_buttons()` to restore button states and reset `self.is_running`, ensuring the GUI is ready for the next action.
+* **Dependencies:** `tkinter.filedialog`, `tkinter.messagebox`, `os.path`, `time` (for simulated delay), and all private `_` prefixed PDF processing methods.
+* **Used by:** `start_execute_thread` (as target of the thread).
+
+### `cancel_action(self)`
+
+* **Purpose:** Sets the internal flag `self.is_running` to `False` to signal the `execute_action` thread to stop processing.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+* **Returns:** None
+* **Functionality:**
+    1.  If `self.is_running` is `True`, it sets the flag to `False`.
+    2.  Updates the status bar to "Cancelling...".
+    3.  If no task is running, updates the status bar accordingly.
+* **Dependencies:** None explicit beyond `self.is_running` flag.
+* **Used by:** "Cancel" button command.
+
+### `reset_buttons(self)`
+
+* **Purpose:** Resets the state of the "Execute Action" and "Cancel" buttons, and the `is_running` flag.
+* **Parameters:**
+    * `self`: The instance of the `PDFCreateGUI` class.
+* **Returns:** None
+* **Functionality:**
+    1.  Enables the "Execute Action" button.
+    2.  Disables the "Cancel" button.
+    3.  Sets `self.is_running` to `False`.
+* **Dependencies:** Tkinter GUI components.
+* **Used by:** `execute_action` (in its `finally` block).
+
+---
+
+## Private PDF Processing Methods (within `PDFCreateGUI` class)
+
+These methods perform the actual PDF manipulations. They are prefixed with an underscore (`_`) to indicate they are intended for internal use by `execute_action` and not meant to be called directly from outside the class. All these methods take `input_pdf_path` and `output_dir` as parameters, and update the status bar upon completion. They also include `self.is_running` checks for cancellation.
+
+### `_remove_mcard_from_name(self, input_pdf_path, output_dir)`
+
+* **Purpose:** Removes " MCARD" or "MCARD " from the base filename of a PDF and saves the renamed copy.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the modified PDF will be saved.
+* **Returns:** None
+* **Dependencies:** `os.path`, `shutil`.
+
+### `_create_folder_for_each_pdf(self, input_pdf_path, output_dir)`
+
+* **Purpose:** Creates a new subfolder in the output directory named after the PDF (without extension) and copies the PDF into it.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the new folder will be created.
+* **Returns:** None
+* **Dependencies:** `os`, `os.path`, `shutil`.
+
+### `_split_pdf(self, input_pdf_path, output_dir)`
+
+* **Purpose:** Splits a multi-page PDF into individual single-page PDF files.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the split pages will be saved.
+* **Returns:** None
+* **Dependencies:** `PyPDF2`, `os.path`.
+
+### `_extract_and_rename(self, input_pdf_path, output_dir)`
+
+* **Purpose:** Placeholder function for an action that would typically extract information from a PDF's content and rename it.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the (renamed) copy will be saved.
+* **Returns:** None
+* **Dependencies:** `os.path`, `shutil`.
+* **Note:** Current implementation just copies and prepends "Extracted\_".
+
+### `_add_swiss_code_to_name(self, input_pdf_path, output_dir)`
+
+* **Purpose:** Prepends "SWISSCODE\_" to the base filename of a PDF and saves the renamed copy.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the renamed PDF will be saved.
+* **Returns:** None
+* **Dependencies:** `os.path`, `shutil`.
+
+### `_remove_all_metadata(self, input_pdf_path, output_dir)`
+
+* **Purpose:** Removes all standard metadata fields (Title, Author, Subject, Keywords) from a PDF.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the modified PDF will be saved.
+* **Returns:** None
+* **Dependencies:** `PyPDF2`, `os.path`.
+
+### `_write_metadata(self, input_pdf_path, output_dir, metadata_dict)`
+
+* **Purpose:** Writes custom metadata to a PDF based on a provided dictionary.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the modified PDF will be saved.
+    * `metadata_dict` (dict): A dictionary of metadata fields (e.g., `{'Title': 'My Title', 'Author': 'Me'}`). Keys will be capitalized and prefixed with `/` for PyPDF2.
+* **Returns:** None
+* **Dependencies:** `PyPDF2`, `os.path`.
+
+### `_merge_pdfs(self, input_pdf_paths, output_dir)`
+
+* **Purpose:** Merges multiple PDF files into a single output PDF.
+* **Parameters:**
+    * `input_pdf_paths` (list of str): A list of full paths to the PDF files to be merged.
+    * `output_dir` (str): Path to the directory where the merged PDF will be saved.
+* **Returns:** None
+* **Dependencies:** `PyPDF2`, `os.path`, `tkinter.messagebox`.
+* **Note:** This function is typically called once in `execute_action` using all selected files, not per-file in the loop.
+
+### `_rename_pdf(self, input_pdf_path, output_dir)`
+
+* **Purpose:** Prompts the user for a new filename and renames a PDF copy accordingly.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the renamed PDF will be saved.
+* **Returns:** None
+* **Dependencies:** `tkinter.simpledialog`, `os.path`, `shutil`.
+
+### `_rotate_pdf(self, input_pdf_path, output_dir, angle)`
+
+* **Purpose:** Rotates all pages of a PDF by a specified angle (90, 180, or 270 degrees).
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the rotated PDF will be saved.
+    * `angle` (int): The rotation angle in degrees (must be 90, 180, or 270).
+* **Returns:** None
+* **Dependencies:** `PyPDF2`, `os.path`, `tkinter.messagebox`.
+
+### `_remove_first_page(self, input_pdf_path, output_dir)`
+
+* **Purpose:** Creates a new PDF by skipping the first page of the input PDF.
+* **Parameters:**
+    * `input_pdf_path` (str): Full path to the source PDF.
+    * `output_dir` (str): Path to the directory where the modified PDF will be saved.
+* **Returns:** None
+* **Dependencies:** `PyPDF2`, `os.path`, `tkinter.messagebox`.
+* **Note:** Handles cases where the PDF has fewer than 2 pages.
+
+---
