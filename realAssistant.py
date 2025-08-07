@@ -46,7 +46,7 @@ class PDFCreateGUI:
 
         # Action Selection
         ttk.Label(root, text="Choose Action:").pack(pady=5)
-        self.action_cb = ttk.Combobox(root, values=[
+        self.action_cb = ttk.Combobox(root, width=30, values=[
             "Remove MCARD From Name",
             "Create Folder For Each PDF",
             "Split PDF",
@@ -66,7 +66,7 @@ class PDFCreateGUI:
         # Metadata Profile Selection Frame
         self.metadata_profile_frame = tk.Frame(root)
         ttk.Label(self.metadata_profile_frame, text="Select Metadata Profile:").pack(pady=2)
-        self.profile_cb = ttk.Combobox(self.metadata_profile_frame, values=list(self.metadata.keys()))
+        self.profile_cb = ttk.Combobox(self.metadata_profile_frame, width=30, values=list(self.metadata.keys()))
         self.profile_cb.current(0)
         self.profile_cb.pack(pady=2)
         self.metadata_profile_frame.pack_forget() # Initially hidden
@@ -74,7 +74,7 @@ class PDFCreateGUI:
         # Rotation Options Frame
         self.rotation_options_frame = tk.Frame(root)
         ttk.Label(self.rotation_options_frame, text="Rotation Angle:").pack(pady=2)
-        self.rotation_angle_cb = ttk.Combobox(self.rotation_options_frame, values=[90, 180, 270])
+        self.rotation_angle_cb = ttk.Combobox(self.rotation_options_frame, width=30, values=[90, 180, 270])
         self.rotation_angle_cb.current(0)
         self.rotation_angle_cb.pack(pady=2)
         self.rotation_options_frame.pack_forget() # Initially hidden
