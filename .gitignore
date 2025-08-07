@@ -1,0 +1,13 @@
+        # Ignore all .log files
+        #*.bat
+
+        # Ignore the 'temp' directory
+        #temp/
+
+        # Ignore a specific file
+        #my_secret_key.pem
+
+        # Ignore all files in 'build' directory except 'build/important.txt'
+        build/
+        dist/
+        #!build/important.txt
