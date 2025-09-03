@@ -1,0 +1,8 @@
+openssl genpkey -algorithm RSA -out mykey.pem -aes256
+openssl req -new -key mykey.pem -out myrequest.csr
+
+openssl x509 -req -days 365 -in myrequest.csr -signkey mykey.pem -out mycert.pem
+osslsigncode sign -certs mycert.pem -key mykey.pem -n "My Application" -i http://www.example.com -t http://timestamp.digicert.com -in myapp.exe -out myapp-signed.exe
+
+
+osslsigncode sign -certs mycert.pem -key mykey.pem -n "realAssistant" -i http://www.example.com -t http://timestamp.digicert.com -in realAssistant.exe -out realAssistant-signed.exe
