@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['realAssistant.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
     datas=[('metadata.ini', '.')],
